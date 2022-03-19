@@ -33,14 +33,14 @@ func setupPlugins(path string) error {
   return nil
 }
 
-func createNode(ctx context.Context, repoPath string) (*core.IpfsNode, icore.CoreAPI, error) {
+func createNode(ctx context.Context, repoPath string, offline bool) (*core.IpfsNode, icore.CoreAPI, error) {
   repo, err := fsrepo.Open(repoPath)
   if err != nil {
     return nil, nil, err
   }
 
   nodeOptions := &core.BuildCfg{
-    Online:  true,
+    Online:  !offline,
     Routing: libp2p.DHTClientOption, // DHTOption
     Repo: repo,
     ExtraOpts: map[string]bool{
@@ -85,4 +85,3 @@ func structToMap(v interface{}) (map[string]interface{}, error) {
 
   return *vMap, nil
 }
-

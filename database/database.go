@@ -4,7 +4,7 @@ import (
   "context"
   "sort"
   "sync"
-
+  "log"
   orbitdb "berty.tech/go-orbit-db"
   "berty.tech/go-orbit-db/accesscontroller"
   "berty.tech/go-orbit-db/events"
@@ -25,6 +25,7 @@ import (
 
 type Database struct {
   ctx                 context.Context
+  Offline             bool
   ConnectionString    string
   URI                 string
   CachePath           string
@@ -48,6 +49,7 @@ func (db *Database) init() (error) {
     Logger: db.Logger,
   })
   if err != nil {
+    log.Printf("1")
     return err
   }
 
@@ -60,6 +62,7 @@ func (db *Database) init() (error) {
   }
 
   if err != nil {
+    log.Printf("2")
     return err
   }
 
@@ -71,11 +74,13 @@ func (db *Database) init() (error) {
 
   storetype := "docstore"
   db.Store, err = db.OrbitDB.Docs(db.ctx, db.ConnectionString, &orbitdb.CreateDBOptions{
+    LocalOnly: &db.Offline,
     AccessController: ac,
     StoreType: &storetype,
     StoreSpecificOpts: documentstore.DefaultStoreOptsForMap("id"),
   })
   if err != nil {
+    log.Printf("3")
     return err
   }
 
@@ -126,6 +131,7 @@ func NewDatabase(
   dbCache string,
   cch *cache.Cache,
   logger *zap.Logger,
+  offline bool,
 ) (*Database, error) {
   var err error
 
@@ -135,6 +141,7 @@ func NewDatabase(
   db.CachePath = dbCache
   db.Cache = cch
   db.Logger = logger
+  db.Offline = offline
 
   defaultPath, err := config.PathRoot()
   if err != nil {
@@ -145,7 +152,7 @@ func NewDatabase(
     return nil, err
   }
 
-  db.IPFSNode, db.IPFSCoreAPI, err = createNode(ctx, defaultPath)
+  db.IPFSNode, db.IPFSCoreAPI, err = createNode(ctx, defaultPath, offline)
   if err != nil {
     return nil, err
   }
@@ -299,4 +306,3 @@ func (db *Database) ListArticles() ([]*models.Article, []*models.Article, error)
 
   return articles, articlesRoots, nil
 }
-
