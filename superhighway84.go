@@ -50,6 +50,8 @@ func main() {
   ctx, cancel := context.WithCancel(context.Background())
   defer cancel()
 
+  headless := true
+
   log.Println("loading configuration ...")
   cfg, err := config.LoadConfig()
   if err != nil {
@@ -76,11 +78,6 @@ func main() {
   var articlesRoots []*models.Article
 
   log.Println("initializing TUI and loading database, please wait ...")
-  TUI := tui.Init(&EMBEDFS, cfg, cch, logger)
-  TUI.SetVersion(strings.TrimLeft(version, "v"), strings.TrimLeft(getLatestVersion(), "v") )
-
-  TUI.ArticlesDatasource = &articles
-  TUI.ArticlesRoots = &articlesRoots
 
   db, err := database.NewDatabase(ctx, cfg.ConnectionString, cfg.DatabaseCachePath, cch, logger)
   if err != nil {
@@ -88,35 +85,13 @@ func main() {
   }
   defer db.Disconnect()
 
-  TUI.CallbackRefreshArticles = func() (error) {
-    articles, articlesRoots, err = db.ListArticles()
-    return err
-  }
-  TUI.CallbackSubmitArticle = func(article *models.Article) (error) {
-    return db.SubmitArticle(article)
+  dbReady := func(address string) {
+    log.Println("headless mode. database initialized")
   }
 
-  err = db.Connect(func(address string) {
-    TUI.Meta["myID"] = db.GetOwnID()
-    TUI.Meta["myPubKey"] = db.GetOwnPubKey()
+  var TUI tui.TUI
 
-    TUI.Views["mainscreen"].(*tui.Mainscreen).SetFooter(address)
-    articles, articlesRoots, _ = db.ListArticles()
-
-
-    time.Sleep(time.Second * 2)
-    TUI.SetView("mainscreen", true)
-
-    TUI.RefreshData()
-    TUI.Refresh()
-    TUI.App.Draw()
-  })
-  if err != nil {
-    log.Panicln(err)
-  }
-
-
-  go func() {
+  updateStats := func() {
     peers := 0
     for {
       bw := db.IPFSNode.Reporter.GetBandwidthTotals()
@@ -124,12 +99,64 @@ func main() {
       if err == nil {
         peers = len(connections)
       }
-      TUI.SetStats(int64(peers), int64(bw.RateIn), int64(bw.RateOut), bw.TotalIn , bw.TotalOut)
+      if headless {
+        log.Printf("Peers: %d V %d ^ %d, VV %d, ^^%d",  int64(peers), int64(bw.RateIn), int64(bw.RateOut), bw.TotalIn , bw.TotalOut)
+      } else {
+        TUI.SetStats(int64(peers), int64(bw.RateIn), int64(bw.RateOut), bw.TotalIn , bw.TotalOut)
+      }
       time.Sleep(time.Second * 5)
     }
-  }()
+  }
 
-  TUI.Launch()
+  if headless {
+    log.Println("initializing and loading database, please wait ...")
+  } else {
+    TUI := tui.Init(&EMBEDFS, cfg, cch, logger)
+    TUI.SetVersion(strings.TrimLeft(version, "v"), strings.TrimLeft(getLatestVersion(), "v") )
+
+    TUI.ArticlesDatasource = &articles
+    TUI.ArticlesRoots = &articlesRoots
+
+    TUI.CallbackRefreshArticles = func() (error) {
+      articles, articlesRoots, err = db.ListArticles()
+      return err
+    }
+    TUI.CallbackSubmitArticle = func(article *models.Article) (error) {
+      return db.SubmitArticle(article)
+    }
+
+    dbReady = func(address string) {
+      TUI.Meta["myID"] = db.GetOwnID()
+      TUI.Meta["myPubKey"] = db.GetOwnPubKey()
+
+      TUI.Views["mainscreen"].(*tui.Mainscreen).SetFooter(address)
+      articles, articlesRoots, _ = db.ListArticles()
+
+
+      time.Sleep(time.Second * 2)
+      TUI.SetView("mainscreen", true)
+
+      TUI.RefreshData()
+      TUI.Refresh()
+      TUI.App.Draw()
+    }
+  }
+
+  err = db.Connect(dbReady)
+  if err != nil {
+    log.Panicln(err)
+  }
+
+  go updateStats()
+
+  if headless {
+    select {
+    case <-ctx.Done():
+      log.Println("Shutting down")
+    }
+  } else {
+    TUI.Launch()
+  }
 }
 
 
@@ -150,4 +177,3 @@ func getLatestVersion() (string) {
   }
   return version
 }
-
