@@ -82,7 +82,9 @@ func main() {
   TUI.ArticlesDatasource = &articles
   TUI.ArticlesRoots = &articlesRoots
 
-  db, err := database.NewDatabase(ctx, cfg.ConnectionString, cfg.DatabaseCachePath, cch, logger)
+  offline := true
+
+  db, err := database.NewDatabase(ctx, cfg.ConnectionString, cfg.DatabaseCachePath, cch, logger, offline)
   if err != nil {
     log.Panicln(err)
   }
@@ -150,4 +152,3 @@ func getLatestVersion() (string) {
   }
   return version
 }
-
