@@ -2,4 +2,8 @@
 /*.log
 /orbit*.db
 /newsgroups
-
+.go
+.DS_Store
+.config
+.ipfs-sh84
+.xdg-cache
